@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -29,32 +28,34 @@ func handleRequest(conn net.Conn) {
 	conn.Close()
 }
 
-func request(destCIDR string, destPort string, sourceIp string, sourcePort string) error {
-	log.Printf("Scanning %v CIDR now!\n---------", destCIDR)
+func urlsCIDR(destCIDR string, destPort string) ([]string, error) {
+	ip, ipv4Net, err := net.ParseCIDR(destCIDR)
+	if err != nil {
+		return nil, err
+	}
+
+	var ips []string
+	for ip := ip.Mask(ipv4Net.Mask); ipv4Net.Contains(ip); increment(ip) {
+		ips = append(ips, fmt.Sprintf("http://%v:%v", ip, destPort))
+	}
+	return ips, nil
+}
+
+func increment(ip net.IP) {
+	for j := len(ip) - 1; j >= 0; j-- {
+		ip[j]++
+		if ip[j] > 0 {
+			break
+		}
+	}
+}
+
+func request(urls []string, sourceIp string, sourcePort string) error {
 	client := &http.Client{
 		Timeout: time.Millisecond * 50,
 	}
-	// convert string to IPNet struct
-	_, ipv4Net, err := net.ParseCIDR(destCIDR)
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	// convert IPNet struct mask and address to uint32
-	// network is BigEndian
-	mask := binary.BigEndian.Uint32(ipv4Net.Mask)
-	start := binary.BigEndian.Uint32(ipv4Net.IP)
-
-	// find the final address
-	finish := (start & mask) | (mask ^ 0xffffffff)
-
-	// loop through addresses as uint32
-	for i := start; i <= finish; i++ {
-		// convert back to net.IP
-		ip := make(net.IP, 4)
-		binary.BigEndian.PutUint32(ip, i)
-		// log.Printf("Testing IP: %v", ip)
-		var url string = fmt.Sprintf("http://%v:%v", ip, destPort)
+	for _, url := range urls {
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			return fmt.Errorf("Got error %s", err.Error())
@@ -67,6 +68,7 @@ func request(destCIDR string, destPort string, sourceIp string, sourcePort strin
 		req.Header.Add("X-Api-Version", payload)
 		req.Header.Add("Bearer", payload)
 		req.Header.Add("Authentication", payload)
+		//log.Printf("Testing %v", req)
 		response, err := client.Do(req)
 		if err != nil {
 			// log.Printf("Got error %v", err.Error())
@@ -123,7 +125,12 @@ func main() {
 	defer l.Close()
 
 	log.Printf("Listening on " + sourceIp + ":" + sourcePort + "\n---------")
-	request(destCIDR, destPort, sourceIp, sourcePort)
+	urls, err := urlsCIDR(destCIDR, destPort)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Scanning %v CIDR now!\n---------", destCIDR)
+	request(urls, sourceIp, sourcePort)
 	for {
 		// Listen for an incoming connection.
 		conn, err := l.Accept()
