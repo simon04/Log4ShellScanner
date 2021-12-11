@@ -88,7 +88,7 @@ func main() {
 	flag.StringVar(&sourcePort, "SourcePort", "8081", "Port used for listening on callback, defaults to 8081")
 	flag.StringVar(&destCIDR, "DestCIDR", "192.168.10.0/24", "What Subnet do you want to scan?")
 	flag.StringVar(&destPort, "DestPort", "8080", "At what port are the applications you want to scan?")
-	flag.BoolVar(&destStdin, "Stdin", false, "Read destination URLs from stdin, e.g., `Log4Shell < ips.txt`")
+	flag.BoolVar(&destStdin, "Stdin", false, "Read destination URLs from stdin, e.g., 'log4shell < ips.txt'")
 
 	// Parse flags
 	flag.Parse()
