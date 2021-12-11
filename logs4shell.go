@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -79,6 +80,7 @@ func main() {
 	var sourcePort string
 	var destCIDR string
 	var destPort string
+	var destStdin bool
 	var connType string = "tcp"
 
 	// Register flags
@@ -86,6 +88,7 @@ func main() {
 	flag.StringVar(&sourcePort, "SourcePort", "8081", "Port used for listening on callback, defaults to 8081")
 	flag.StringVar(&destCIDR, "DestCIDR", "192.168.10.0/24", "What Subnet do you want to scan?")
 	flag.StringVar(&destPort, "DestPort", "8080", "At what port are the applications you want to scan?")
+	flag.BoolVar(&destStdin, "Stdin", false, "Read destination URLs from stdin, e.g., `Log4Shell < ips.txt`")
 
 	// Parse flags
 	flag.Parse()
@@ -117,13 +120,23 @@ func main() {
 	defer l.Close()
 	log.Printf("Listening on " + sourceIp + ":" + sourcePort + "\n---------")
 
-	urls, err := urlsCIDR(destCIDR, destPort)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Scanning %v CIDR now!\n---------", destCIDR)
-	for _, url := range urls {
-		request(url, payload)
+	if destStdin {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			url := scanner.Text()
+			url = strings.TrimSpace(url)
+			log.Printf("Scanning %v", url)
+			request(url, payload)
+		}
+	} else {
+		urls, err := urlsCIDR(destCIDR, destPort)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Scanning %v CIDR now!\n---------", destCIDR)
+		for _, url := range urls {
+			request(url, payload)
+		}
 	}
 
 	log.Printf("Completed scanning of provided CIDR, leaving connection open for later callbacks. You should ctrl+c this program once final callbacks have landed.\n---------")
