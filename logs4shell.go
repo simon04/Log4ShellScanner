@@ -1,10 +1,5 @@
 package main
 
-// Go HiveNightmare - Identify accessible Volume Shadow Copy and pull hive files if flagged
-// Version: 1.0
-// Author: mwarnerblu
-// usage: gohn.exe <-test|-extract> <targetDir>
-
 import (
 	"encoding/binary"
 	"flag"
