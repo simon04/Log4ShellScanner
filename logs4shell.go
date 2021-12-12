@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/cakturk/go-netstat/netstat"
 	"log"
 	"net"
 	"net/http"
@@ -81,6 +82,7 @@ func main() {
 	var destCIDR string
 	var destPort string
 	var destStdin bool
+	var local bool
 	var connType string = "tcp"
 
 	// Register flags
@@ -89,13 +91,16 @@ func main() {
 	flag.StringVar(&destCIDR, "DestCIDR", "192.168.10.0/24", "What Subnet do you want to scan?")
 	flag.StringVar(&destPort, "DestPort", "8080", "At what port are the applications you want to scan?")
 	flag.BoolVar(&destStdin, "Stdin", false, "Read destination URLs from stdin, e.g., 'log4shell < ips.txt'")
+	flag.BoolVar(&local, "Local", false, "Test all LISTEN ports from this machine")
 
 	// Parse flags
 	flag.Parse()
 
 	// Log out passed configuration
 	log.Printf(welcome)
-	if sourceIp == "Unset" {
+	if local {
+		sourceIp = "127.0.0.1"
+	} else if sourceIp == "Unset" {
 		log.Printf("You did not set -SourceIP, please try again or run with --help")
 		os.Exit(1)
 	}
@@ -125,6 +130,22 @@ func main() {
 		for scanner.Scan() {
 			url := scanner.Text()
 			url = strings.TrimSpace(url)
+			log.Printf("Scanning %v", url)
+			request(url, payload)
+		}
+	} else if local {
+		tabs, err := netstat.TCPSocks(func(s *netstat.SockTabEntry) bool {
+			return s.State == netstat.Listen
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, socktab := range tabs {
+			port := socktab.LocalAddr.Port
+			if port == sourcePort {
+				continue
+			}
+			url := fmt.Sprintf("http://127.0.0.1:%v")
 			log.Printf("Scanning %v", url)
 			request(url, payload)
 		}
